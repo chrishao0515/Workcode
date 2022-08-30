@@ -1,0 +1,88 @@
+import argparse
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib
+import stl
+from matplotlib import colors
+from scipy.interpolate import griddata
+
+DEFINE_WIDTH = 160
+DEFINE_HEIGHT = 160
+
+
+def plot(mesh, output_dir, filename):
+    plt.figure(figsize=(10, 7.5))  #設定比例7:7.5 單位為英吋 * DPI = 圖片輸出尺寸
+    output_filename = f'{filename}.png'
+    points = np.average(mesh.vectors, axis=1)
+    x = points[:, 0]
+    y = points[:, 1]
+    z = points[:, 2]
+
+    image_width = max(x) - min(x)
+    image_height = max(y) - min(y)
+    scale_x = (DEFINE_WIDTH / image_width)
+    scale_y = (DEFINE_HEIGHT / image_height)
+
+    scale = scale_x if scale_x < scale_y else scale_y
+    x = x * scale
+    y = y * scale
+    z = z * scale
+    x = x - min(x)
+    y = y - min(y)
+    z = z - min(z)
+
+    if max(x) > max(y):
+        distance = max(x) - max(y)
+        y = y + distance / 2
+        X, Y = np.meshgrid(np.arange(min(x), max(x)), np.arange(min(y) - distance / 2, max(y) + distance / 2))
+    else:
+        distance = max(y) - max(x)
+        x = x + distance / 2
+        X, Y = np.meshgrid(np.arange(min(x) - distance / 2, max(x) + distance / 2), np.arange(min(y), max(y)))
+   
+    Z = griddata((x.ravel(), y.ravel()), z.ravel(), (X, Y), method='cubic')
+    #Z_ = Z
+    #Z_[np.argmax(Z_)] = np.min(Z)           
+    print(np.nanmin(Z))
+    #Z = Z - np.nanmin(Z)
+    F = [i for i in range(71)]
+    
+    cs = plt.contour(X, Y, Z, F[:], cmap=plt.cm.jet)
+    plt.xlim(min(x), max(x))
+    plt.ylim(min(y), max(y))
+    plt.axis('off')
+    plt.gca().set_aspect('equal', adjustable='box')
+
+    # cmap
+    # norm = colors.Normalize(vmin=cs.cvalues.min(), vmax=cs.cvalues.max())
+    # sm = plt.cm.ScalarMappable(norm=norm, cmap=cs.cmap)
+    # sm.set_array([])
+    # plt.colorbar(sm, ticks=cs.levels)
+    
+    plt.savefig(os.path.join(output_dir,output_filename),dpi=100)#加上DPI
+    plt.show()
+    plt.close()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_dir', default='stl/', type=str, required=False, help='stl folder')
+    parser.add_argument('--output_dir', default='output/', type=str, required=False, help='output folder')
+    args = parser.parse_args()
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    for file in os.listdir(args.input_dir):
+        filename, ext = os.path.splitext(file)
+        if ext != '.stl':
+            continue
+
+        file_path = os.path.join(args.input_dir, file)
+        mesh = stl.mesh.Mesh.from_file(file_path)
+        plot(mesh, args.output_dir, filename)
+        
+
+if __name__ == '__main__':
+    main()

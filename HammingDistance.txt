@@ -1,0 +1,135 @@
+def getlevelList(buffers, totalLevel):
+    minimum = buffers[0][0]
+    maximum = buffers[0][0]
+    levelList = []
+    for buffer in buffers:
+        localMin = min(buffer)
+        localMax = max(buffer)
+        if (localMin < minimum): 
+            minimum = localMin
+        if (localMax > maximum):
+            maximum = localMax
+    length = maximum - minimum
+    gap = length / totalLevel
+    for lv in range(totalLevel):
+        levelList.append(minimum + lv*gap)
+    levelList.append(maximum)
+    return levelList
+
+def genLevelHVs(totalLevel, D):
+    print ('generating level HVs')
+    levelHVs = dict()
+    indexVector = range(D)
+    nextLevel = int((D/2/totalLevel))
+    change = int(D / 2)
+    for level in range(totalLevel):
+        name = level
+        if(level == 0):
+            base = np.full(D, baseVal)
+            toOne = np.random.permutation(indexVector)[:change]
+        else:
+            toOne = np.random.permutation(indexVector)[:nextLevel]
+        for index in toOne:
+            base[index] = base[index] * -1
+        levelHVs[name] = copy.deepcopy(base)
+    for i in range (len(levelHVs)):
+        for j in range (len(levelHVs[0])):
+            if levelHVs[i][j]==-1:
+                levelHVs[i][j]=0
+    return levelHVs
+
+def genIDHVs(totalPos, D):
+    print ('generating ID HVs')
+    IDHVs = dict()
+    indexVector = range(D)
+    change = int(D / 2)
+    for level in range(totalPos):
+        name = level
+        base = np.full(D, baseVal)
+        toOne = np.random.permutation(indexVector)[:change]  
+        for index in toOne:
+            base[index] = 1
+        IDHVs[name] = copy.deepcopy(base)
+    for i in range (len(IDHVs)):
+        for j in range (len(IDHVs[0])):
+            if IDHVs[i][j]==-1:
+                IDHVs[i][j]=0
+    return IDHVs
+
+def IDMultHV (inputBuffer, D, levelHVs, levelList, IDHVs):
+    totalLevel = len(levelList) - 1
+    totalPos = len(IDHVs.keys()) - 1
+    sumHV = np.zeros(D, dtype = np.int)
+    for keyVal in range(len(inputBuffer)):
+        IDHV = IDHVs[keyVal]
+        key = numToKey(inputBuffer[keyVal], levelList)
+        levelHV = levelHVs[key] 
+        sumHV = sumHV + (IDHV ^ levelHV)
+    return sumHV
+
+def numToKey(value, levelList):
+    if (value == levelList[-1]):
+        return len(levelList)-2
+    upperIndex = len(levelList) - 1
+    lowerIndex = 0
+    keyIndex = 0
+    while (upperIndex > lowerIndex):
+        keyIndex = int((upperIndex + lowerIndex)/2)
+        if (levelList[keyIndex] <= value and levelList[keyIndex+1] > value):
+            return keyIndex
+        if (levelList[keyIndex] > value):
+            upperIndex = keyIndex
+            keyIndex = int((upperIndex + lowerIndex)/2)
+        else:
+            lowerIndex = keyIndex
+            keyIndex = int((upperIndex + lowerIndex)/2)
+    return keyIndex  
+
+#對稱度用
+
+import numpy as np
+import random 
+import os
+import copy
+import cv2
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+x_train=[]
+trainHVs = []
+baseVal = -1
+def read_directory(directory_name):
+    # this loop is for read each image in this foder,directory_name is the foder name with images.
+    for filename in os.listdir(directory_name):
+        #print(filename) #just for test 
+        img = cv2.imread(directory_name + "/" + filename, cv2.IMREAD_GRAYSCALE)
+        img=cv2.resize(img,(75,35))
+        x_train.append(img)
+        #print(img)
+
+        
+read_directory("C:/Users/xul42/code/HD/pic")
+x_train=np.array(x_train)
+D = [10000] # dimensions in random space
+
+size=75*35
+posIdNum = size
+n=100
+x_trainre=x_train.reshape((2,size)) #(2,840)
+for D in D:
+    trainHVs = []
+    levelList=getlevelList(x_trainre, n)
+    levelHVs = genLevelHVs(n, D)
+    IDHVs   = genIDHVs(posIdNum,D)
+
+    for index in range(len(x_trainre)):
+        trainHVs.append(IDMultHV(np.array(x_trainre[index]),D, levelHVs,levelList,IDHVs))
+    for i in range (len(trainHVs)):
+        for j in range (len(trainHVs[0])): 
+            if trainHVs[i][j]<size/2:
+                trainHVs[i][j]=0
+            else:
+                trainHVs[i][j]=1
+    ham=0
+    for i in range (len(trainHVs[1])):
+        if trainHVs[0][i]!=trainHVs[1][i]:
+            ham=ham+1
+    print("維度=%d,距離=%d"%(D,ham))
